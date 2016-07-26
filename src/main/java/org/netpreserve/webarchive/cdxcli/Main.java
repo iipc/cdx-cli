@@ -15,14 +15,29 @@
  */
 package org.netpreserve.webarchive.cdxcli;
 
+import org.netpreserve.webarchive.cdxcli.cmdreformat.CommandReformat;
+
+import java.io.UncheckedIOException;
+
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.ParameterException;
 
 /**
- *
+ * Main class for cdx command line tool.
  */
-public class Main {
+public final class Main {
 
+    /**
+     * Private constructor to avoid instantiation.
+     */
+    private Main() {
+    }
+
+    /**
+     * Main method.
+     *
+     * @param args command line arguments
+     */
     public static void main(String[] args) {
         MainParameters mp = new MainParameters();
         JCommander jc = new JCommander(mp);
@@ -40,13 +55,21 @@ public class Main {
             if (jc.getParsedCommand() != null) {
                 String command = jc.getParsedCommand();
                 long startTime = System.currentTimeMillis();
+
                 ((Command) jc.getCommands().get(command).getObjects().get(0)).exec(mp);
+
                 long runTime = System.currentTimeMillis() - startTime;
                 System.out.println("Command " + command + " was executed in " + runTime + "ms");
             }
         } catch (ParameterException e) {
             System.out.println(e.getLocalizedMessage());
             jc.usage();
+            System.exit(0);
+        } catch (UncheckedIOException e) {
+            System.out.println(e.getCause().getLocalizedMessage());
+            System.exit(0);
+        } catch (Exception e) {
+            System.out.println(e.getLocalizedMessage());
             System.exit(0);
         }
     }

@@ -13,15 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-package org.netpreserve.webarchive.cdxcli;
-
-import com.beust.jcommander.Parameter;
-
 /**
- * Declaration of global parameters.
+ * Base components for CDX manipulation command line client.
  */
-public class MainParameters {
-    @Parameter(names = {"-h", "--help"}, description = "print this help message", help = true)
-    boolean help;
-}
+package org.netpreserve.webarchive.cdxcli;

@@ -13,31 +13,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.netpreserve.webarchive.cdxcli;
 
-import com.beust.jcommander.Parameter;
-import com.beust.jcommander.Parameters;
+import com.beust.jcommander.IParameterValidator;
+import com.beust.jcommander.ParameterException;
 
 /**
- *
+ * Validator for parameters not yet supported.
  */
-@Parameters(commandNames = "reformat", commandDescription = "Reformat cdx file")
-public class CommandReformat implements Command {
-
-    @Parameter(names = {"-s", "--sort"}, description = "sort file after reformatting")
-    boolean sort = false;
-
-    @Parameter(names = {"-c", "--concatenate"}, description = "concatenate input files into one file")
-    boolean concatenate = false;
-
+public class ParameterNotSupported implements IParameterValidator {
     @Override
-    public void exec(MainParameters mp) {
-        System.out.println(this.toString());
-    }
-
-    @Override
-    public String toString() {
-        return "CommandReformat{" + "sort=" + sort + ", concatenate=" + concatenate + '}';
+    public void validate(String name, String value) throws ParameterException {
+        throw new ParameterException("The parameter " + name + " is not supported yet.");
     }
 
 }
