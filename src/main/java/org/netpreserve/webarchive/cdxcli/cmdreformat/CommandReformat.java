@@ -59,7 +59,7 @@ public class CommandReformat implements Command {
                validateWith = ParameterNotSupported.class)
     boolean sort = false;
 
-    @Parameter(names = {"-c", "--concatenate"}, description = "concatenate input files into one file")
+    @Parameter(names = {"-c", "--concatenate"}, description = "concatenate output into one file")
     boolean concatenate = false;
 
     @Parameter(names = {"-i", "--input"}, required = true, variableArity = true, description = "input file. "
@@ -91,7 +91,7 @@ public class CommandReformat implements Command {
         if (outputFileName == null) {
             try (CdxSource src = createMultiCdxSource(inputFileNames);
                     Writer dst = new OutputStreamWriter(System.out, StandardCharsets.UTF_8);) {
-                reformat(src, new BufferedWriter(dst));
+                reformat(src, dst);
             } catch (IOException ex) {
                 throw new UncheckedIOException(ex);
             }
