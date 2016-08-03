@@ -30,10 +30,10 @@ import java.util.List;
 import com.beust.jcommander.Parameter;
 import com.beust.jcommander.Parameters;
 import org.netpreserve.commons.cdx.CdxFormat;
-import org.netpreserve.commons.cdx.CdxLineFormat;
+import org.netpreserve.commons.cdx.cdxrecord.CdxLineFormat;
 import org.netpreserve.commons.cdx.CdxRecord;
 import org.netpreserve.commons.cdx.CdxSource;
-import org.netpreserve.commons.cdx.CdxjLineFormat;
+import org.netpreserve.commons.cdx.cdxrecord.CdxjLineFormat;
 import org.netpreserve.commons.cdx.SearchKey;
 import org.netpreserve.commons.cdx.SearchResult;
 import org.netpreserve.commons.cdx.cdxsource.BlockCdxSource;
@@ -41,9 +41,9 @@ import org.netpreserve.commons.cdx.cdxsource.CdxFileDescriptor;
 import org.netpreserve.commons.cdx.cdxsource.CdxSourceExecutorService;
 import org.netpreserve.commons.cdx.cdxsource.MultiCdxSource;
 import org.netpreserve.commons.cdx.formatter.CdxRecordFormatter;
+import org.netpreserve.commons.cdx.sort.SortingWriter;
 import org.netpreserve.webarchive.cdxcli.Command;
 import org.netpreserve.webarchive.cdxcli.MainParameters;
-import org.netpreserve.webarchive.cdxcli.ParameterNotSupported;
 
 /**
  * Command for reformatting from one version of cdx to another.
@@ -55,8 +55,7 @@ public class CommandReformat implements Command {
                validateWith = FormatValidator.class)
     String format = "cdxj";
 
-    @Parameter(names = {"-s", "--sort"}, description = "sort file after reformatting",
-               validateWith = ParameterNotSupported.class)
+    @Parameter(names = {"-s", "--sort"}, description = "sort file after reformatting")
     boolean sort = false;
 
     @Parameter(names = {"-c", "--concatenate"}, description = "concatenate output into one file")
@@ -67,11 +66,20 @@ public class CommandReformat implements Command {
     List<String> inputFileNames;
 
     @Parameter(names = {"-o", "--output"}, description = "destination. If not given, standard out is used. "
-            + "If -c is given, the output will be treated as a file name. "
-            + "If output is a directory, result is written to <output>/out.<suffix>. "
-            + "If -c is not given, output must be a directory and the filenames will be equal to the input "
-            + "except for the suffix.")
+               + "If -c is given, the output will be treated as a file name. "
+               + "If output is a directory, result is written to <output>/out.<suffix>. "
+               + "If -c is not given, output must be a directory and the filenames will be equal to the input "
+               + "except for the suffix.")
     String outputFileName;
+
+    @Parameter(names = {"-t", "--tempfiles"}, description = "the number of temporary files used for sorting. "
+               + "Only applicable when parameter -s is set")
+    int scratchfileCount = 10;
+
+    @Parameter(names = {"-h", "--heapsize"}, description = "the number of lines in the heap when sorting. "
+               + "The amount of memory used is dependent on average cdx line length. "
+               + "Only applicable when parameter -s is set")
+    int heapSize = 100;
 
     @Override
     public void exec(MainParameters mp) {
@@ -89,9 +97,11 @@ public class CommandReformat implements Command {
         }
 
         if (outputFileName == null) {
-            try (CdxSource src = createMultiCdxSource(inputFileNames);
-                    Writer dst = new OutputStreamWriter(System.out, StandardCharsets.UTF_8);) {
-                reformat(src, dst);
+            // Wrtie to std out
+            Writer dst = new OutputStreamWriter(System.out, StandardCharsets.UTF_8);
+            try (Writer out = createOutput(dst);
+                    CdxSource src = createMultiCdxSource(inputFileNames);) {
+                reformat(src, out);
             } catch (IOException ex) {
                 throw new UncheckedIOException(ex);
             }
@@ -111,8 +121,9 @@ public class CommandReformat implements Command {
                 });
                 System.out.println("into: " + outFile);
 
-                try (CdxSource src = createMultiCdxSource(inputFileNames);) {
-                    reformat(src, outFile);
+                try (Writer out = createOutput(outFile);
+                        CdxSource src = createMultiCdxSource(inputFileNames);) {
+                    reformat(src, out);
                 } catch (IOException ex) {
                     throw new UncheckedIOException(ex);
                 }
@@ -131,8 +142,9 @@ public class CommandReformat implements Command {
 
                     System.out.println("Reformatting: " + in + " into: " + outFile);
 
-                    try (CdxSource src = createCdxSource(in);) {
-                        reformat(src, outFile);
+                    try (Writer out = createOutput(outFile);
+                            CdxSource src = createCdxSource(in);) {
+                        reformat(src, out);
                     } catch (IOException ex) {
                         throw new UncheckedIOException(ex);
                     }
@@ -143,20 +155,42 @@ public class CommandReformat implements Command {
     }
 
     /**
-     * Do the reformatting and write the result to a file.
+     * Create a writer from an output file.
      * <p>
-     * @param src the cdx input
      * @param outFile a file to send the result to
+     * @return the newly created writer
      * @throws IOException is thrown if the output file already exists or the underlying IO classes throws an exception.
      */
-    void reformat(CdxSource src, Path outFile) throws IOException {
+    Writer createOutput(Path outFile) throws IOException {
         if (Files.exists(outFile)) {
             throw new UncheckedIOException(new IOException(outFile + " already exists"));
         }
 
-        try (Writer out = new FileWriter(outFile.toFile());) {
-            reformat(src, out);
+        Writer out = new FileWriter(outFile.toFile());
+        out = new BufferedWriter(out);
+        if (sort) {
+            out = new SortingWriter(out, scratchfileCount, heapSize);
         }
+
+        return out;
+    }
+
+    /**
+     * Create a writer from another writer.
+     * <p>
+     * @param out a writer to send the result to
+     * @return the newly created writer
+     * @throws IOException is thrown if the output file already exists or the underlying IO classes throws an exception.
+     */
+    Writer createOutput(Writer out) throws IOException {
+        if (!(out instanceof BufferedWriter)) {
+            out = new BufferedWriter(out);
+        }
+        if (sort) {
+            out = new SortingWriter(out, scratchfileCount, heapSize);
+        }
+
+        return out;
     }
 
     /**
@@ -167,7 +201,6 @@ public class CommandReformat implements Command {
      * @throws IOException is thrown if the underlying IO classes could not read or write
      */
     void reformat(CdxSource src, Writer out) throws IOException {
-        out = new BufferedWriter(out);
         SearchResult result = src.search(new SearchKey(), null, false);
 
         CdxFormat outputFormat;
