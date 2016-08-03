@@ -21,6 +21,7 @@ import java.io.UncheckedIOException;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.ParameterException;
+import org.netpreserve.webarchive.cdxcli.cmdextract.CommandExtract;
 
 /**
  * Main class for cdx command line tool.
@@ -43,6 +44,7 @@ public final class Main {
         JCommander jc = new JCommander(mp);
         jc.setProgramName("cdx-cli");
         jc.addCommand(new CommandReformat());
+        jc.addCommand(new CommandExtract());
 
         try {
             jc.parse(args);

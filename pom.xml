@@ -16,6 +16,7 @@
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
         <github.name>cdx-cli</github.name>
+        <jwat.core.version>1.0.4</jwat.core.version>
     </properties>
 
     <name>CDX-cli</name>
@@ -134,6 +135,38 @@
     <dependencyManagement>
         <dependencies>
             <dependency>
+                <groupId>com.beust</groupId>
+                <artifactId>jcommander</artifactId>
+                <version>1.48</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.jwat</groupId>
+                <artifactId>jwat-common</artifactId>
+                <version>${jwat.core.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jwat</groupId>
+                <artifactId>jwat-gzip</artifactId>
+                <version>${jwat.core.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jwat</groupId>
+                <artifactId>jwat-arc</artifactId>
+                <version>${jwat.core.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jwat</groupId>
+                <artifactId>jwat-warc</artifactId>
+                <version>${jwat.core.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jwat</groupId>
+                <artifactId>jwat-archive</artifactId>
+                <version>${jwat.core.version}</version>
+            </dependency>
+
+            <dependency>
                 <groupId>junit</groupId>
                 <artifactId>junit</artifactId>
                 <version>4.12</version>
@@ -144,18 +177,6 @@
                 <artifactId>assertj-core</artifactId>
                 <version>3.4.1</version>
                 <scope>test</scope>
-            </dependency>
-
-            <dependency>
-                <groupId>com.google.guava</groupId>
-                <artifactId>guava</artifactId>
-                <version>19.0</version>
-            </dependency>
-
-            <dependency>
-                <groupId>com.beust</groupId>
-                <artifactId>jcommander</artifactId>
-                <version>1.48</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -171,6 +192,26 @@
             <artifactId>jcommander</artifactId>
         </dependency>
         <dependency>
+            <groupId>org.jwat</groupId>
+            <artifactId>jwat-common</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.jwat</groupId>
+            <artifactId>jwat-gzip</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.jwat</groupId>
+            <artifactId>jwat-arc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.jwat</groupId>
+            <artifactId>jwat-warc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.jwat</groupId>
+            <artifactId>jwat-archive</artifactId>
+        </dependency>
+        <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
         </dependency>
@@ -179,17 +220,5 @@
             <artifactId>assertj-core</artifactId>
         </dependency>
     </dependencies>
-
-    <profiles>
-        <profile>
-            <id>JDK 8 Build</id>
-            <activation>
-                <jdk>[1.8,)</jdk>
-            </activation>
-            <properties>
-                <additionalparam>-Xdoclint:none</additionalparam>
-            </properties>
-        </profile>
-    </profiles>
 
 </project>
