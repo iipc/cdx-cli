@@ -33,6 +33,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import com.beust.jcommander.Parameter;
 import com.beust.jcommander.Parameters;
@@ -53,7 +56,6 @@ import org.jwat.warc.WarcReaderFactory;
 import org.jwat.warc.WarcReaderUncompressed;
 import org.jwat.warc.WarcRecord;
 import org.netpreserve.commons.cdx.CdxFormat;
-import org.netpreserve.commons.cdx.cdxrecord.CdxLineFormat;
 import org.netpreserve.commons.cdx.cdxrecord.CdxjLineFormat;
 import org.netpreserve.commons.cdx.FieldName;
 import org.netpreserve.commons.cdx.formatter.CdxRecordFormatter;
@@ -61,10 +63,8 @@ import org.netpreserve.commons.cdx.json.NumberValue;
 import org.netpreserve.commons.cdx.json.StringValue;
 import org.netpreserve.commons.cdx.json.TimestampValue;
 import org.netpreserve.commons.cdx.json.UriValue;
-import org.netpreserve.commons.cdx.sort.SortingWriter;
 import org.netpreserve.webarchive.cdxcli.Command;
 import org.netpreserve.webarchive.cdxcli.MainParameters;
-import org.netpreserve.webarchive.cdxcli.cmdreformat.FormatValidator;
 
 /**
  * Command for extracting cdx records from ARC and WARC files.
@@ -97,9 +97,8 @@ public class CommandExtract implements Command {
      */
     private final int payloadHeaderMaxSize = 32768;
 
-    @Parameter(names = {"-f", "--format"}, description = "one of cdxj, cdx9 or cdx11.",
-               validateWith = FormatValidator.class)
-    String format = "cdxj";
+    @Parameter(names = {"-f", "--format"}, description = "one of cdxj, cdx9 or cdx11.")
+    CdxFormat format = CdxjLineFormat.DEFAULT_CDXJLINE;
 
     @Parameter(names = {"-s", "--sort"}, description = "sort file after extracting")
     boolean sort = false;
@@ -129,23 +128,13 @@ public class CommandExtract implements Command {
 
     @Override
     public void exec(MainParameters mp) {
-        String outFileSuffix;
-        switch (format) {
-            case "cdxj":
-                outFileSuffix = ".cdxj";
-                break;
-            case "cdx9":
-            case "cdx11":
-                outFileSuffix = ".cdx";
-                break;
-            default:
-                outFileSuffix = null;
-        }
+        String outFileSuffix = "." + format.getFileSuffix();
+        CdxRecordFormatter formatter = new CdxRecordFormatter(format);
 
         if (outputFileName == null) {
             // Wrtie to std out
             Writer dst = new OutputStreamWriter(System.out, StandardCharsets.UTF_8);
-            try (Writer out = createOutput(dst);) {
+            try (Output out = createOutput(dst, formatter);) {
                 for (String in : inputFileNames) {
                     File inFile = new File(in);
                     extract(inFile, out);
@@ -163,23 +152,26 @@ public class CommandExtract implements Command {
                 } else {
                     outFile = outPath;
                 }
-                if (Files.exists(outFile)) {
-                    throw new UncheckedIOException(new IOException(outFile + " already exists"));
-                }
 
                 System.err.println("Extracting: ");
                 inputFileNames.stream().forEach((in) -> {
                     System.out.println("  " + in);
                 });
+                System.err.println("Number of input files: " + inputFileNames.size());
                 System.err.println("into: " + outFile);
 
-                try (Writer out = createOutput(outFile)) {
+                try (Output out = createOutput(outFile, formatter)) {
+                    ExecutorService executor = Executors.newFixedThreadPool(Math.min(inputFileNames.size(), 16));
                     for (String in : inputFileNames) {
                         File inFile = new File(in);
-                        extract(inFile, out);
+                        executor.submit(new WarcReaderThread(inFile, out));
                     }
+                    executor.shutdown();
+                    executor.awaitTermination(5, TimeUnit.HOURS);
                 } catch (IOException ex) {
                     throw new UncheckedIOException(ex);
+                } catch (InterruptedException ex) {
+                    throw new RuntimeException(ex);
                 }
             } else {
                 // Write to one file per (w)arc file.
@@ -197,7 +189,7 @@ public class CommandExtract implements Command {
 
                     System.err.println("Extracting: " + in + " into: " + outFile);
 
-                    try (Writer out = createOutput(outFile)) {
+                    try (Output out = createOutput(outFile, formatter)) {
                         File inFile = new File(in);
                         extract(inFile, out);
                     } catch (IOException ex) {
@@ -208,6 +200,28 @@ public class CommandExtract implements Command {
         }
     }
 
+    private class WarcReaderThread implements Runnable {
+
+        private final File inFile;
+
+        private final Output out;
+
+        public WarcReaderThread(File inFile, Output out) {
+            this.inFile = inFile;
+            this.out = out;
+        }
+
+        @Override
+        public void run() {
+            try {
+                extract(inFile, out);
+            } catch (IOException ex) {
+                throw new RuntimeException(ex);
+            }
+        }
+
+    }
+
     /**
      * Create a writer from an output file.
      * <p>
@@ -215,18 +229,22 @@ public class CommandExtract implements Command {
      * @return the newly created writer
      * @throws IOException is thrown if the output file already exists or the underlying IO classes throws an exception.
      */
-    Writer createOutput(Path outFile) throws IOException {
+    Output createOutput(Path outFile, CdxRecordFormatter formatter) throws IOException {
         if (Files.exists(outFile)) {
             throw new UncheckedIOException(new IOException(outFile + " already exists"));
         }
 
         Writer out = new FileWriter(outFile.toFile());
-        out = new BufferedWriter(out);
-        if (sort) {
-            out = new SortingWriter(out, scratchfileCount, heapSize);
-        }
+        BufferedWriter bufferedOut = new BufferedWriter(out);
 
-        return out;
+        bufferedOut.write(format.getFileHeader());
+        bufferedOut.write('\n');
+
+        if (sort) {
+            return new SortingOutput(bufferedOut, formatter, scratchfileCount, heapSize);
+        } else {
+            return new SerialOutput(bufferedOut, formatter);
+        }
     }
 
     /**
@@ -236,25 +254,33 @@ public class CommandExtract implements Command {
      * @return the newly created writer
      * @throws IOException is thrown if the output file already exists or the underlying IO classes throws an exception.
      */
-    Writer createOutput(Writer out) throws IOException {
-        if (!(out instanceof BufferedWriter)) {
-            out = new BufferedWriter(out);
-        }
-        if (sort) {
-            out = new SortingWriter(out, scratchfileCount, heapSize);
+    Output createOutput(Writer out, CdxRecordFormatter formatter) throws IOException {
+        BufferedWriter bufferedOut;
+
+        if (out instanceof BufferedWriter) {
+            bufferedOut = (BufferedWriter) out;
+        } else {
+            bufferedOut = new BufferedWriter(out);
         }
 
-        return out;
+        bufferedOut.write(format.getFileHeader());
+        bufferedOut.write('\n');
+
+        if (sort) {
+            return new SortingOutput(bufferedOut, formatter, scratchfileCount, heapSize);
+        } else {
+            return new SerialOutput(bufferedOut, formatter);
+        }
     }
 
     /**
      * Do the extraction and write the result to a {@link Writer}.
      * <p>
      * @param src the cdx input
-     * @param out an {@link Writer} to send the result to
+     * @param writer an {@link Writer} to send the result to
      * @throws IOException is thrown if the underlying IO classes could not read or write
      */
-    void extract(File src, Writer out) throws IOException {
+    void extract(File src, Output out) throws IOException {
         FileIdent fileIdent = FileIdent.ident(src);
         if (src.length() > 0) {
             if (fileIdent.filenameId != fileIdent.streamId) {
@@ -266,23 +292,8 @@ public class CommandExtract implements Command {
                 case FileIdent.FILEID_WARC:
                 case FileIdent.FILEID_WARC_GZ:
                     System.err.println("Processing file: '" + src.getPath() + "'");
-                    CdxFormat outputFormat;
-                    switch (format) {
-                        case "cdxj":
-                            outputFormat = CdxjLineFormat.DEFAULT_CDXJLINE;
-                            break;
-                        case "cdx9":
-                            outputFormat = CdxLineFormat.CDX09LINE;
-                            break;
-                        case "cdx11":
-                            outputFormat = CdxLineFormat.CDX11LINE;
-                            break;
-                        default:
-                            outputFormat = null;
-                    }
 
-                    CdxRecordFormatter formatter = new CdxRecordFormatter(outputFormat);
-                    process(src, fileIdent, out, formatter);
+                    process(src, fileIdent, out);
                     break;
                 default:
                     System.err.println("Not a (W)ARC file: '" + src.getPath() + "'");
@@ -301,11 +312,9 @@ public class CommandExtract implements Command {
                     break;
             }
         }
-
-        out.flush();
     }
 
-    public void process(File inFile, FileIdent fileIdent, Writer out, CdxRecordFormatter formatter) {
+    public void process(File inFile, FileIdent fileIdent, Output out) {
         String fileName = inFile.getName();
         ArcReader arcReader = null;
         WarcReader warcReader = null;
@@ -322,7 +331,7 @@ public class CommandExtract implements Command {
         ArcRecordBase arcRecord;
         WarcRecord warcRecord;
         try {
-            try (InputStream pbin = new BufferedInputStream(new FileInputStream(inFile), 8192);) {
+            try (InputStream pbin = new BufferedInputStream(new FileInputStream(inFile), 1024 * 512);) {
 
                 if (fileIdent.streamId == FileIdent.FILEID_ARC_GZ || fileIdent.streamId == FileIdent.FILEID_WARC_GZ) {
                     try (GzipReader gzipReader = new GzipReader(pbin);) {
@@ -343,8 +352,7 @@ public class CommandExtract implements Command {
                                             currentRecord.set(FieldName.RECORD_LENGTH,
                                                     NumberValue.valueOf(gzipEntry.consumed));
 
-                                            formatter.format(out, currentRecord, true);
-                                            out.append('\n');
+                                            out.write(currentRecord);
                                         }
                                     }
                                 } else if (warcReader != null) {
@@ -358,8 +366,7 @@ public class CommandExtract implements Command {
                                         currentRecord.set(FieldName.RECORD_LENGTH,
                                                 NumberValue.valueOf(gzipEntry.consumed));
 
-                                        formatter.format(out, currentRecord, true);
-                                        out.append('\n');
+                                        out.write(currentRecord);
                                     }
                                 }
                             }
@@ -378,8 +385,7 @@ public class CommandExtract implements Command {
                                 currentRecord.set(FieldName.RECORD_LENGTH,
                                         NumberValue.valueOf(gzipEntry.consumed));
 
-                                formatter.format(out, currentRecord, true);
-                                out.append('\n');
+                                out.write(currentRecord);
                             }
                         }
                     } else if (warcReader != null) {
@@ -392,12 +398,10 @@ public class CommandExtract implements Command {
                             currentRecord.set(FieldName.RECORD_LENGTH,
                                     NumberValue.valueOf(gzipEntry.consumed));
 
-                            formatter.format(out, currentRecord, true);
-                            out.append('\n');
+                            out.write(currentRecord);
                         }
                     }
                 }
-//            callbacks.apcDone();
             }
         } catch (Throwable t) {
             t.printStackTrace();

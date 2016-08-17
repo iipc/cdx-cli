@@ -43,6 +43,8 @@ public final class Main {
         MainParameters mp = new MainParameters();
         JCommander jc = new JCommander(mp);
         jc.setProgramName("cdx-cli");
+        jc.addConverterFactory(new FormatConverterFactory());
+
         jc.addCommand(new CommandReformat());
         jc.addCommand(new CommandExtract());
 

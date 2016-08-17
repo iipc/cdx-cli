@@ -30,7 +30,6 @@ import java.util.List;
 import com.beust.jcommander.Parameter;
 import com.beust.jcommander.Parameters;
 import org.netpreserve.commons.cdx.CdxFormat;
-import org.netpreserve.commons.cdx.cdxrecord.CdxLineFormat;
 import org.netpreserve.commons.cdx.CdxRecord;
 import org.netpreserve.commons.cdx.CdxSource;
 import org.netpreserve.commons.cdx.cdxrecord.CdxjLineFormat;
@@ -51,9 +50,8 @@ import org.netpreserve.webarchive.cdxcli.MainParameters;
 @Parameters(commandNames = "reformat", commandDescription = "Reformat cdx file")
 public class CommandReformat implements Command {
 
-    @Parameter(names = {"-f", "--format"}, description = "one of cdxj, cdx9 or cdx11.",
-               validateWith = FormatValidator.class)
-    String format = "cdxj";
+    @Parameter(names = {"-f", "--format"}, description = "one of cdxj, cdx9 or cdx11.")
+    CdxFormat format = CdxjLineFormat.DEFAULT_CDXJLINE;
 
     @Parameter(names = {"-s", "--sort"}, description = "sort file after reformatting")
     boolean sort = false;
@@ -83,18 +81,7 @@ public class CommandReformat implements Command {
 
     @Override
     public void exec(MainParameters mp) {
-        String outFileSuffix;
-        switch (format) {
-            case "cdxj":
-                outFileSuffix = ".cdxj";
-                break;
-            case "cdx9":
-            case "cdx11":
-                outFileSuffix = ".cdx";
-                break;
-            default:
-                outFileSuffix = null;
-        }
+        String outFileSuffix = "." + format.getFileSuffix();
 
         if (outputFileName == null) {
             // Wrtie to std out
@@ -168,6 +155,10 @@ public class CommandReformat implements Command {
 
         Writer out = new FileWriter(outFile.toFile());
         out = new BufferedWriter(out);
+
+        out.write(format.getFileHeader());
+        out.write('\n');
+
         if (sort) {
             out = new SortingWriter(out, scratchfileCount, heapSize);
         }
@@ -186,6 +177,10 @@ public class CommandReformat implements Command {
         if (!(out instanceof BufferedWriter)) {
             out = new BufferedWriter(out);
         }
+
+        out.write(format.getFileHeader());
+        out.write('\n');
+
         if (sort) {
             out = new SortingWriter(out, scratchfileCount, heapSize);
         }
@@ -203,22 +198,7 @@ public class CommandReformat implements Command {
     void reformat(CdxSource src, Writer out) throws IOException {
         SearchResult result = src.search(new SearchKey(), null, false);
 
-        CdxFormat outputFormat;
-        switch (format) {
-            case "cdxj":
-                outputFormat = CdxjLineFormat.DEFAULT_CDXJLINE;
-                break;
-            case "cdx9":
-                outputFormat = CdxLineFormat.CDX09LINE;
-                break;
-            case "cdx11":
-                outputFormat = CdxLineFormat.CDX11LINE;
-                break;
-            default:
-                outputFormat = null;
-        }
-
-        CdxRecordFormatter formatter = new CdxRecordFormatter(outputFormat);
+        CdxRecordFormatter formatter = new CdxRecordFormatter(format);
 
         for (CdxRecord cdxLine : result) {
             formatter.format(out, cdxLine, true);
