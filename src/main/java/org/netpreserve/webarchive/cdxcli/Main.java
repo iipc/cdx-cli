@@ -36,13 +36,13 @@ public final class Main {
 
     /**
      * Main method.
-     *
+     * <p>
      * @param args command line arguments
      */
     public static void main(String[] args) {
         MainParameters mp = new MainParameters();
         JCommander jc = new JCommander(mp);
-        jc.setProgramName("cdx-cli");
+        jc.setProgramName("cdxcli");
         jc.addConverterFactory(new FormatConverterFactory());
 
         jc.addCommand(new CommandReformat());
@@ -51,30 +51,34 @@ public final class Main {
         try {
             jc.parse(args);
 
-            if (mp.help) {
+            if (mp.version) {
+                System.out.println("cdxcli version: " + Main.class.getPackage().getImplementationVersion());
+                System.exit(0);
+            }
+
+            if (mp.help || jc.getParsedCommand() == null) {
                 jc.usage();
                 System.exit(0);
             }
 
-            if (jc.getParsedCommand() != null) {
-                String command = jc.getParsedCommand();
-                long startTime = System.currentTimeMillis();
+            String command = jc.getParsedCommand();
+            long startTime = System.currentTimeMillis();
 
-                ((Command) jc.getCommands().get(command).getObjects().get(0)).exec(mp);
+            ((Command) jc.getCommands().get(command).getObjects().get(0)).exec(mp);
 
-                long runTime = System.currentTimeMillis() - startTime;
-                System.out.println("Command " + command + " was executed in " + runTime + "ms");
-            }
+            long runTime = System.currentTimeMillis() - startTime;
+            System.err.println("Command " + command + " was executed in " + runTime + "ms");
+
         } catch (ParameterException e) {
-            System.out.println(e.getLocalizedMessage());
+            System.err.println(e.getLocalizedMessage());
             jc.usage();
-            System.exit(0);
+            System.exit(1);
         } catch (UncheckedIOException e) {
-            System.out.println(e.getCause().getLocalizedMessage());
-            System.exit(0);
+            System.err.println(e.getCause().getLocalizedMessage());
+            System.exit(2);
         } catch (Exception e) {
-            System.out.println(e.getLocalizedMessage());
-            System.exit(0);
+            System.err.println(e.getLocalizedMessage());
+            System.exit(3);
         }
     }
 

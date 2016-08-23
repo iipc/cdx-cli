@@ -24,4 +24,7 @@ import com.beust.jcommander.Parameter;
 public class MainParameters {
     @Parameter(names = {"-h", "--help"}, description = "print this help message", help = true)
     boolean help;
+
+    @Parameter(names = {"-v", "--version"}, description = "print version and exit", help = true)
+    boolean version;
 }

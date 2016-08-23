@@ -8,7 +8,7 @@
     </parent>
 
     <groupId>org.netpreserve.webarchive</groupId>
-    <artifactId>cdx-cli</artifactId>
+    <artifactId>cdxcli</artifactId>
     <version>1.0.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
@@ -54,19 +54,52 @@
 
     <build>
         <plugins>
+            <!-- Make version number available for application -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <configuration>
+                    <archive>
+                        <manifest>
+                            <addDefaultImplementationEntries>true</addDefaultImplementationEntries>
+                        </manifest>
+                    </archive>
+                </configuration>
+            </plugin>
+
+            <!-- Create assembly with startup scripts and dependencies -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>appassembler-maven-plugin</artifactId>
+                <version>1.10</version>
+                <configuration>
+                    <licenseHeaderFile>${basedir}/src/main/etc/license-header.txt</licenseHeaderFile>
+                    <programs>
+                        <program>
+                            <mainClass>org.netpreserve.webarchive.cdxcli.Main</mainClass>
+                            <id>cdxcli</id>
+                        </program>
+                    </programs>
+                    <binFolder>bin</binFolder>
+                    <repositoryName>lib</repositoryName>
+                    <repositoryLayout>flat</repositoryLayout>
+                    <endorsedDir>plugins</endorsedDir>
+                </configuration>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>assemble</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- Create a distributable gzip archive -->
             <plugin>
                 <artifactId>maven-assembly-plugin</artifactId>
                 <configuration>
-                    <finalName>${project.artifactId}-dist</finalName>
-                    <descriptorRefs>
-                        <descriptorRef>jar-with-dependencies</descriptorRef>
-                    </descriptorRefs>
-                    <appendAssemblyId>false</appendAssemblyId>
-                    <archive>
-                        <manifest>
-                            <mainClass>org.netpreserve.webarchive.cdxcli.Main</mainClass>
-                        </manifest>
-                    </archive>
+                    <descriptor>src/main/etc/assembly.xml</descriptor>
                 </configuration>
                 <executions>
                     <execution>
