@@ -97,31 +97,32 @@ public class CommandExtract implements Command {
      */
     private final int payloadHeaderMaxSize = 32768;
 
-    @Parameter(names = {"-f", "--format"}, description = "one of cdxj, cdx9 or cdx11.")
+    @Parameter(names = {"-f", "--format"}, description = "One of cdxj, cdx9 or cdx11.")
     CdxFormat format = CdxjLineFormat.DEFAULT_CDXJLINE;
 
-    @Parameter(names = {"-s", "--sort"}, description = "sort file after extracting")
+    @Parameter(names = {"-s", "--sort"}, description = "Sort file after extracting")
     boolean sort = false;
 
-    @Parameter(names = {"-c", "--concatenate"}, description = "concatenate output into one file")
+    @Parameter(names = {"-c", "--concatenate"}, description = "Concatenate output into one file")
     boolean concatenate = false;
 
-    @Parameter(names = {"-i", "--input"}, required = true, variableArity = true, description = "input file. "
-               + "Multiple values can be separated by comma or the parameter can be repeated")
+    @Parameter(names = {"-i", "--input"}, required = true, variableArity = true, description = "Input file. "
+               + "Multiple values can be separated by comma, space or the parameter can be repeated. "
+               + "Separation by space means that shell expansion will work.")
     List<String> inputFileNames;
 
-    @Parameter(names = {"-o", "--output"}, description = "destination. If not given, standard out is used. "
+    @Parameter(names = {"-o", "--output"}, description = "Destination. If not given, standard out is used. "
                + "If -c is given, the output will be treated as a file name. "
-               + "If output is a directory, result is written to <output>/out.<suffix>. "
+               + "If output is a directory, result is written to '<output>/out.<suffix>'. "
                + "If -c is not given, output must be a directory and the filenames will be equal to the input "
                + "except for the suffix.")
     String outputFileName;
 
-    @Parameter(names = {"-t", "--tempfiles"}, description = "the number of temporary files used for sorting. "
+    @Parameter(names = {"-t", "--tempfiles"}, description = "The number of temporary files used for sorting. "
                + "Only applicable when parameter -s is set")
     int scratchfileCount = 10;
 
-    @Parameter(names = {"-h", "--heapsize"}, description = "the number of lines in the heap when sorting. "
+    @Parameter(names = {"-h", "--heapsize"}, description = "The number of lines in the heap when sorting. "
                + "The amount of memory used is dependent on average cdx line length. "
                + "Only applicable when parameter -s is set")
     int heapSize = 100;
