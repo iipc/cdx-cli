@@ -15,16 +15,10 @@
  */
 package org.netpreserve.webarchive.cdxcli.cmdextract;
 
-import org.netpreserve.commons.cdx.cdxrecord.UnconnectedCdxRecord;
-
-import java.io.BufferedInputStream;
-
 import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStreamWriter;
 import java.io.UncheckedIOException;
 import java.io.Writer;
@@ -39,30 +33,10 @@ import java.util.concurrent.TimeUnit;
 
 import com.beust.jcommander.Parameter;
 import com.beust.jcommander.Parameters;
-import org.jwat.arc.ArcHeader;
-import org.jwat.arc.ArcReader;
-import org.jwat.arc.ArcReaderFactory;
-import org.jwat.arc.ArcReaderUncompressed;
-import org.jwat.arc.ArcRecord;
-import org.jwat.arc.ArcRecordBase;
 import org.jwat.archive.FileIdent;
-import org.jwat.common.HttpHeader;
-import org.jwat.common.UriProfile;
-import org.jwat.gzip.GzipEntry;
-import org.jwat.gzip.GzipReader;
-import org.jwat.warc.WarcHeader;
-import org.jwat.warc.WarcReader;
-import org.jwat.warc.WarcReaderFactory;
-import org.jwat.warc.WarcReaderUncompressed;
-import org.jwat.warc.WarcRecord;
 import org.netpreserve.commons.cdx.CdxFormat;
 import org.netpreserve.commons.cdx.cdxrecord.CdxjLineFormat;
-import org.netpreserve.commons.cdx.FieldName;
 import org.netpreserve.commons.cdx.formatter.CdxRecordFormatter;
-import org.netpreserve.commons.cdx.json.NumberValue;
-import org.netpreserve.commons.cdx.json.StringValue;
-import org.netpreserve.commons.cdx.json.TimestampValue;
-import org.netpreserve.commons.cdx.json.UriValue;
 import org.netpreserve.webarchive.cdxcli.Command;
 import org.netpreserve.webarchive.cdxcli.MainParameters;
 
@@ -71,31 +45,6 @@ import org.netpreserve.webarchive.cdxcli.MainParameters;
  */
 @Parameters(commandNames = "extract", commandDescription = "Extract cdx file from ARC/WARC files")
 public class CommandExtract implements Command {
-
-    /**
-     * URI profile to use.
-     */
-    private final UriProfile uriProfile = UriProfile.RFC3986_ABS_16BIT_LAX;
-
-    /**
-     * Enable block digest calculation/validation.
-     */
-    private final boolean blockDigestEnabled = true;
-
-    /**
-     * Enable payload digest calculation/validation.
-     */
-    private final boolean payloadDigestEnabled = true;
-
-    /**
-     * Max record header size.
-     */
-    private final int recordHeaderMaxSize = 8192;
-
-    /**
-     * Max payload header size (http header etc.).
-     */
-    private final int payloadHeaderMaxSize = 32768;
 
     @Parameter(names = {"-f", "--format"}, description = "One of cdxj, cdx9 or cdx11.")
     CdxFormat format = CdxjLineFormat.DEFAULT_CDXJLINE;
@@ -126,6 +75,8 @@ public class CommandExtract implements Command {
                + "The amount of memory used is dependent on average cdx line length. "
                + "Only applicable when parameter -s is set")
     int heapSize = 100;
+
+    final CdxExtractor cdxExtractor = new CdxExtractor();
 
     @Override
     public void exec(MainParameters mp) {
@@ -224,10 +175,11 @@ public class CommandExtract implements Command {
     }
 
     /**
-     * Create a writer from an output file.
+     * Create a Output from an output file.
      * <p>
      * @param outFile a file to send the result to
-     * @return the newly created writer
+     * @param formatter the formatter used to serialize the records
+     * @return the newly created Output
      * @throws IOException is thrown if the output file already exists or the underlying IO classes throws an exception.
      */
     Output createOutput(Path outFile, CdxRecordFormatter formatter) throws IOException {
@@ -249,11 +201,12 @@ public class CommandExtract implements Command {
     }
 
     /**
-     * Create a writer from another writer.
+     * Create a Output from a writer.
      * <p>
      * @param out a writer to send the result to
-     * @return the newly created writer
-     * @throws IOException is thrown if the output file already exists or the underlying IO classes throws an exception.
+     * @param formatter the formatter used to serialize the records
+     * @return the newly created Output
+     * @throws IOException is thrown if the underlying IO classes throws an exception.
      */
     Output createOutput(Writer out, CdxRecordFormatter formatter) throws IOException {
         BufferedWriter bufferedOut;
@@ -278,7 +231,7 @@ public class CommandExtract implements Command {
      * Do the extraction and write the result to a {@link Writer}.
      * <p>
      * @param src the cdx input
-     * @param writer an {@link Writer} to send the result to
+     * @param out an {@link Output} to send the result to
      * @throws IOException is thrown if the underlying IO classes could not read or write
      */
     void extract(File src, Output out) throws IOException {
@@ -294,7 +247,7 @@ public class CommandExtract implements Command {
                 case FileIdent.FILEID_WARC_GZ:
                     System.err.println("Processing file: '" + src.getPath() + "'");
 
-                    process(src, fileIdent, out);
+                    cdxExtractor.process(src, fileIdent, out);
                     break;
                 default:
                     System.err.println("Not a (W)ARC file: '" + src.getPath() + "'");
@@ -313,202 +266,6 @@ public class CommandExtract implements Command {
                     break;
             }
         }
-    }
-
-    public void process(File inFile, FileIdent fileIdent, Output out) {
-        String fileName = inFile.getName();
-        ArcReader arcReader = null;
-        WarcReader warcReader = null;
-
-        if (fileIdent.streamId == FileIdent.FILEID_ARC
-                || fileIdent.streamId == FileIdent.FILEID_ARC_GZ) {
-            arcReader = createArcReader();
-        } else if (fileIdent.streamId == FileIdent.FILEID_WARC
-                || fileIdent.streamId == FileIdent.FILEID_WARC_GZ) {
-            warcReader = createWarcReader();
-        }
-
-        GzipEntry gzipEntry = null;
-        ArcRecordBase arcRecord;
-        WarcRecord warcRecord;
-        try {
-            try (InputStream pbin = new BufferedInputStream(new FileInputStream(inFile), 1024 * 512);) {
-
-                if (fileIdent.streamId == FileIdent.FILEID_ARC_GZ || fileIdent.streamId == FileIdent.FILEID_WARC_GZ) {
-                    try (GzipReader gzipReader = new GzipReader(pbin);) {
-
-                        while ((gzipEntry = gzipReader.getNextEntry()) != null) {
-                            try (InputStream in = gzipEntry.getInputStream();) {
-
-                                if (arcReader != null) {
-                                    while ((arcRecord = arcReader.getNextRecordFrom(in, gzipEntry.getStartOffset()))
-                                            != null) {
-
-                                        if (arcRecord.recordType == ArcRecord.RT_ARC_RECORD) {
-                                            UnconnectedCdxRecord currentRecord = readArcRecord(arcRecord);
-                                            currentRecord.set(FieldName.FILENAME, StringValue.valueOf(fileName));
-
-                                            arcRecord.close();
-                                            gzipEntry.close();
-                                            currentRecord.set(FieldName.RECORD_LENGTH,
-                                                    NumberValue.valueOf(gzipEntry.consumed));
-
-                                            out.write(currentRecord);
-                                        }
-                                    }
-                                } else if (warcReader != null) {
-                                    while ((warcRecord = warcReader.getNextRecordFrom(in, gzipEntry.getStartOffset()))
-                                            != null) {
-                                        UnconnectedCdxRecord currentRecord = readWarcRecord(warcRecord);
-                                        currentRecord.set(FieldName.FILENAME, StringValue.valueOf(fileName));
-
-                                        warcRecord.close();
-                                        gzipEntry.close();
-                                        currentRecord.set(FieldName.RECORD_LENGTH,
-                                                NumberValue.valueOf(gzipEntry.consumed));
-
-                                        out.write(currentRecord);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } else if (fileIdent.streamId == FileIdent.FILEID_ARC || fileIdent.streamId == FileIdent.FILEID_WARC) {
-                    if (arcReader != null) {
-                        while ((arcRecord = arcReader.getNextRecordFrom(pbin, gzipEntry.getStartOffset())) != null) {
-
-                            if (arcRecord.recordType == ArcRecord.RT_ARC_RECORD) {
-                                UnconnectedCdxRecord currentRecord = readArcRecord(arcRecord);
-                                currentRecord.set(FieldName.FILENAME, StringValue.valueOf(fileName));
-
-                                arcRecord.close();
-                                gzipEntry.close();
-                                currentRecord.set(FieldName.RECORD_LENGTH,
-                                        NumberValue.valueOf(gzipEntry.consumed));
-
-                                out.write(currentRecord);
-                            }
-                        }
-                    } else if (warcReader != null) {
-                        while ((warcRecord = warcReader.getNextRecordFrom(pbin, gzipEntry.getStartOffset())) != null) {
-                            UnconnectedCdxRecord currentRecord = readWarcRecord(warcRecord);
-                            currentRecord.set(FieldName.FILENAME, StringValue.valueOf(fileName));
-
-                            warcRecord.close();
-                            gzipEntry.close();
-                            currentRecord.set(FieldName.RECORD_LENGTH,
-                                    NumberValue.valueOf(gzipEntry.consumed));
-
-                            out.write(currentRecord);
-                        }
-                    }
-                }
-            }
-        } catch (Throwable t) {
-            t.printStackTrace();
-        } finally {
-            if (arcReader != null) {
-                arcReader.close();
-            }
-            if (warcReader != null) {
-                warcReader.close();
-            }
-        }
-    }
-
-    private UnconnectedCdxRecord readArcRecord(ArcRecordBase arcRecord) throws IOException {
-        ArcHeader arcHeader = arcRecord.header;
-        UnconnectedCdxRecord currentRecord = new UnconnectedCdxRecord();
-        currentRecord.set(FieldName.TIMESTAMP, TimestampValue.valueOf(arcHeader.archiveDateStr));
-        currentRecord.set(FieldName.ORIGINAL_URI, UriValue.valueOf(arcHeader.urlStr));
-        currentRecord.set(FieldName.RECORD_TYPE, StringValue.valueOf("response"));
-        currentRecord.set(FieldName.OFFSET, NumberValue.valueOf(arcRecord.getStartOffset()));
-
-        String mimeType = arcHeader.contentTypeStr;
-        long length = arcHeader.archiveLength;
-        if (arcRecord.getHttpHeader() != null) {
-            HttpHeader httpHeader = arcRecord.getHttpHeader();
-            if (httpHeader.isValid()) {
-                length = httpHeader.getPayloadLength();
-            }
-            mimeType = httpHeader.contentType;
-            currentRecord.set(FieldName.RESPONSE_CODE, NumberValue
-                    .valueOf(httpHeader.getProtocolStatusCode()));
-        }
-
-        currentRecord.set(FieldName.CONTENT_TYPE, StringValue.valueOf(mimeType));
-        currentRecord.set(FieldName.CONTENT_LENGTH, NumberValue.valueOf(arcHeader.archiveLength));
-        currentRecord.set(FieldName.PAYLOAD_LENGTH, NumberValue.valueOf(length));
-        arcRecord.close();
-        currentRecord.set(FieldName.DIGEST, StringValue.valueOf(arcRecord.computedBlockDigest.digestString));
-
-        if (arcRecord.computedPayloadDigest != null) {
-            currentRecord.set(FieldName.PAYLOAD_DIGEST,
-                    StringValue.valueOf(arcRecord.computedPayloadDigest.digestString));
-        }
-        return currentRecord;
-    }
-
-    private UnconnectedCdxRecord readWarcRecord(WarcRecord warcRecord) throws IOException {
-        WarcHeader warcHeader = warcRecord.header;
-        UnconnectedCdxRecord currentRecord = new UnconnectedCdxRecord();
-        currentRecord.set(FieldName.TIMESTAMP, TimestampValue.valueOf(warcHeader.warcDateStr));
-        currentRecord.set(FieldName.ORIGINAL_URI, UriValue.valueOf(warcHeader.warcTargetUriStr));
-        currentRecord.set(FieldName.RECORD_TYPE, StringValue.valueOf("response"));
-        currentRecord.set(FieldName.OFFSET, NumberValue.valueOf(warcRecord.getStartOffset()));
-
-        String mimeType = warcHeader.contentTypeStr;
-        long length = warcHeader.contentLength;
-        if (warcRecord.getHttpHeader() != null) {
-            HttpHeader httpHeader = warcRecord.getHttpHeader();
-            if (httpHeader.isValid()) {
-                length = httpHeader.getPayloadLength();
-            }
-            mimeType = httpHeader.contentType;
-            currentRecord.set(FieldName.RESPONSE_CODE, NumberValue
-                    .valueOf(httpHeader.getProtocolStatusCode()));
-        }
-
-        currentRecord.set(FieldName.CONTENT_TYPE, StringValue.valueOf(mimeType));
-//        currentRecord.set(FieldName.CONTENT_LENGTH, NumberValue.valueOf(arcHeader.archiveLength));
-        currentRecord.set(FieldName.PAYLOAD_LENGTH, NumberValue.valueOf(length));
-        warcRecord.close();
-        currentRecord.set(FieldName.DIGEST, StringValue
-                .valueOf(warcRecord.computedBlockDigest.digestString));
-
-        if (warcRecord.computedPayloadDigest != null) {
-            currentRecord.set(FieldName.PAYLOAD_DIGEST,
-                    StringValue.valueOf(warcRecord.computedPayloadDigest.digestString));
-        }
-        return currentRecord;
-    }
-
-    private ArcReaderUncompressed createArcReader() {
-        ArcReaderUncompressed arcReader = ArcReaderFactory.getReaderUncompressed();
-        arcReader.setUriProfile(uriProfile);
-        arcReader.setBlockDigestEnabled(blockDigestEnabled);
-        arcReader.setBlockDigestAlgorithm("SHA1");
-        arcReader.setBlockDigestEncoding("base32");
-        arcReader.setPayloadDigestEnabled(payloadDigestEnabled);
-        arcReader.setPayloadDigestAlgorithm("SHA1");
-        arcReader.setPayloadDigestEncoding("base32");
-        arcReader.setRecordHeaderMaxSize(recordHeaderMaxSize);
-        arcReader.setPayloadHeaderMaxSize(payloadHeaderMaxSize);
-        return arcReader;
-    }
-
-    private WarcReaderUncompressed createWarcReader() {
-        WarcReaderUncompressed warcReader = WarcReaderFactory.getReaderUncompressed();
-        warcReader.setWarcTargetUriProfile(uriProfile);
-        warcReader.setBlockDigestEnabled(blockDigestEnabled);
-        warcReader.setBlockDigestAlgorithm("SHA1");
-        warcReader.setBlockDigestEncoding("base32");
-        warcReader.setPayloadDigestEnabled(payloadDigestEnabled);
-        warcReader.setPayloadDigestAlgorithm("SHA1");
-        warcReader.setPayloadDigestEncoding("base32");
-        warcReader.setRecordHeaderMaxSize(recordHeaderMaxSize);
-        warcReader.setPayloadHeaderMaxSize(payloadHeaderMaxSize);
-        return warcReader;
     }
 
 }
