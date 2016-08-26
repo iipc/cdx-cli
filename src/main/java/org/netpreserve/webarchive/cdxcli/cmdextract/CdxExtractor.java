@@ -252,6 +252,7 @@ public class CdxExtractor {
         currentRecord.set(FieldName.FILENAME, StringValue.valueOf(fileName));
 
         WarcHeader warcHeader = warcRecord.header;
+        currentRecord.set(FieldName.RECORD_ID, StringValue.valueOf(warcHeader.warcRecordIdStr));
         currentRecord.set(FieldName.TIMESTAMP, TimestampValue.valueOf(warcHeader.warcDateStr));
         currentRecord.set(FieldName.ORIGINAL_URI, UriValue.valueOf(warcHeader.warcTargetUriStr));
         currentRecord.set(FieldName.RECORD_TYPE, StringValue.valueOf(warcHeader.warcTypeStr));
@@ -279,6 +280,13 @@ public class CdxExtractor {
             currentRecord.set(FieldName.PAYLOAD_DIGEST,
                     StringValue.valueOf(warcRecord.computedPayloadDigest.digestString));
         }
+
+        if (warcRecord.header.warcTypeIdx == WarcConstants.RT_IDX_REVISIT) {
+            currentRecord.set(FieldName.REVISIT_ORIGINAL_ID, StringValue.valueOf(warcHeader.warcRefersToStr));
+            currentRecord.set(FieldName.REVISIT_ORIGINAL_URI, StringValue.valueOf(warcHeader.warcRefersToTargetUriStr));
+            currentRecord.set(FieldName.REVISIT_ORIGINAL_DATE, StringValue.valueOf(warcHeader.warcRefersToDateStr));
+        }
+
         return currentRecord;
     }
 
