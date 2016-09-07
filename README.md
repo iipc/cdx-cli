@@ -1,5 +1,7 @@
 # cdx-cli
 
+[![Build Status](https://travis-ci.org/iipc/cdx-cli.png?branch=master)](https://travis-ci.org/iipc/cdx-cli/)
+
 Command line utility for working with CDX files
 
 ##Features:
