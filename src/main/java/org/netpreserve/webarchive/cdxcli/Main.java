@@ -71,13 +71,22 @@ public final class Main {
 
         } catch (ParameterException e) {
             System.err.println(e.getLocalizedMessage());
+            if (mp.printStacktrace) {
+                e.printStackTrace();
+            }
             jc.usage();
             System.exit(1);
         } catch (UncheckedIOException e) {
             System.err.println(e.getCause().getLocalizedMessage());
+            if (mp.printStacktrace) {
+                e.printStackTrace();
+            }
             System.exit(2);
         } catch (Exception e) {
             System.err.println(e.getLocalizedMessage());
+            if (mp.printStacktrace) {
+                e.printStackTrace();
+            }
             System.exit(3);
         }
     }
