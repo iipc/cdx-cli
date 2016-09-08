@@ -283,8 +283,8 @@ public class CdxExtractor {
 
         if (warcRecord.header.warcTypeIdx == WarcConstants.RT_IDX_REVISIT) {
             currentRecord.set(FieldName.REVISIT_ORIGINAL_ID, StringValue.valueOf(warcHeader.warcRefersToStr));
-            currentRecord.set(FieldName.REVISIT_ORIGINAL_URI, StringValue.valueOf(warcHeader.warcRefersToTargetUriStr));
-            currentRecord.set(FieldName.REVISIT_ORIGINAL_DATE, StringValue.valueOf(warcHeader.warcRefersToDateStr));
+            currentRecord.set(FieldName.REVISIT_ORIGINAL_URI, UriValue.valueOf(warcHeader.warcRefersToTargetUriStr));
+            currentRecord.set(FieldName.REVISIT_ORIGINAL_DATE, TimestampValue.valueOf(warcHeader.warcRefersToDateStr));
         }
 
         return currentRecord;
