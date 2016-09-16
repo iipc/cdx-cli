@@ -28,7 +28,7 @@ public class MainParameters {
     @Parameter(names = {"-v", "--version"}, description = "print version and exit", help = true)
     boolean version;
 
-    @Parameter(names = {"-t", "--trace"}, description = "If an error occurs, normal is to orint only the error message."
+    @Parameter(names = {"-t", "--trace"}, description = "If an error occurs, normal is to print only the error message."
             + " With this option you will get the complete stack trace.")
     boolean printStacktrace;
 }

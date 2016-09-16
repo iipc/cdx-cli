@@ -22,7 +22,7 @@ So to test it you need to clone and compile it yourself.
 Then you can run the utility directly from the build's target directory:
 
 ```bash
-# target/appasembler/bin/cdxcli
+# target/appassembler/bin/cdxcli
 ```
 
 Or use the packaged file:
