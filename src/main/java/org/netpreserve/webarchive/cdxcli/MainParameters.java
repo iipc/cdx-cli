@@ -31,4 +31,7 @@ public class MainParameters {
     @Parameter(names = {"-t", "--trace"}, description = "If an error occurs, normal is to print only the error message."
             + " With this option you will get the complete stack trace.")
     boolean printStacktrace;
+
+    @Parameter(names = {"-w", "--workdir"}, description = "Directory for creating temporary files.")
+    String workDir;
 }

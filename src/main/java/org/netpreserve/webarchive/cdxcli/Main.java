@@ -15,9 +15,14 @@
  */
 package org.netpreserve.webarchive.cdxcli;
 
+import java.io.FileNotFoundException;
+
 import org.netpreserve.webarchive.cdxcli.cmdreformat.CommandReformat;
 
 import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.ParameterException;
@@ -59,6 +64,14 @@ public final class Main {
             if (mp.help || jc.getParsedCommand() == null) {
                 jc.usage();
                 System.exit(0);
+            }
+
+            if (mp.workDir != null) {
+                Path workPath = Paths.get(mp.workDir);
+                if (!Files.isDirectory(workPath)) {
+                    throw new FileNotFoundException("Workdir '" + workPath.toAbsolutePath() + "' does not exist");
+                }
+                System.setProperty("java.io.tmpdir", mp.workDir);
             }
 
             String command = jc.getParsedCommand();

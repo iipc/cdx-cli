@@ -52,7 +52,8 @@ public interface Command {
      * Called by the {@link Main} class with the global parameters.
      * <p>
      * @param mp the parsed global parameters.
+     * @throws java.lang.Exception is thrown if command fails execution
      */
-    void exec(MainParameters mp);
+    void exec(MainParameters mp) throws Exception;
 
 }
