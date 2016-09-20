@@ -17,6 +17,11 @@ package org.netpreserve.webarchive.cdxcli.cmdextract;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import org.netpreserve.commons.cdx.CdxRecord;
 import org.netpreserve.commons.cdx.formatter.CdxRecordFormatter;
@@ -36,24 +41,29 @@ public class SortingOutput implements Output {
 
     private final PolyphaseMergeSort pms;
 
-    private final Thread sortingThread;
-    private long count;
+    private final Future sortingThread;
+
+    private final ExecutorService executorService;
 
     public SortingOutput(BufferedWriter writer, CdxRecordFormatter formatter, int scratchFileCount, int heapSize) {
         this.writer = writer;
         this.formatter = formatter;
         this.queue = new CloseableStringQueue(128);
         this.pms = new PolyphaseMergeSort(scratchFileCount, heapSize);
-        sortingThread = new Thread(new SortingThread(), "Sorting thread");
-        sortingThread.start();
+        this.executorService = Executors.newSingleThreadExecutor();
+        this.sortingThread = this.executorService.submit(new SortingThread());
     }
 
     @Override
     public void write(CdxRecord record) {
         try {
             queue.put(formatter.format(record, true));
-            count++;
-        } catch (InterruptedException ex) {
+        } catch (Exception ex) {
+            try {
+                close();
+            } catch (IOException ex1) {
+                throw new RuntimeException(ex1);
+            }
             throw new RuntimeException(ex);
         }
     }
@@ -63,11 +73,23 @@ public class SortingOutput implements Output {
         queue.close();
         try {
             // Wait for sort to finish
-            sortingThread.join();
+            sortingThread.get();
+            executorService.shutdown();
         } catch (InterruptedException ex) {
             throw new RuntimeException(ex);
+        } catch (ExecutionException ex) {
+            if (ex.getCause() instanceof UncheckedIOException) {
+                throw (IOException) ex.getCause().getCause();
+            } else {
+                throw new RuntimeException(ex.getCause());
+            }
+        } finally {
+            try {
+                writer.close();
+            } catch (IOException ex) {
+                throw new RuntimeException(ex);
+            }
         }
-        writer.close();
     }
 
     /**
@@ -77,7 +99,12 @@ public class SortingOutput implements Output {
 
         @Override
         public void run() {
-            pms.sort(queue, writer);
+            try {
+                pms.sort(queue, writer);
+            } catch (Exception ex) {
+                queue.close();
+                throw ex;
+            }
         }
 
     }

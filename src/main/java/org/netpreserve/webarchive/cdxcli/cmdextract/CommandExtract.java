@@ -79,7 +79,7 @@ public class CommandExtract implements Command {
     final CdxExtractor cdxExtractor = new CdxExtractor();
 
     @Override
-    public void exec(MainParameters mp) {
+    public void exec(MainParameters mp) throws Exception {
         String outFileSuffix = "." + format.getFileSuffix();
         CdxRecordFormatter formatter = new CdxRecordFormatter(format);
 
@@ -91,8 +91,6 @@ public class CommandExtract implements Command {
                     File inFile = new File(in);
                     extract(inFile, out);
                 }
-            } catch (IOException ex) {
-                throw new UncheckedIOException(ex);
             }
         } else {
             Path outPath = Paths.get(outputFileName);
@@ -120,10 +118,6 @@ public class CommandExtract implements Command {
                     }
                     executor.shutdown();
                     executor.awaitTermination(5, TimeUnit.HOURS);
-                } catch (IOException ex) {
-                    throw new UncheckedIOException(ex);
-                } catch (InterruptedException ex) {
-                    throw new RuntimeException(ex);
                 }
             } else {
                 // Write to one file per (w)arc file.
@@ -144,8 +138,6 @@ public class CommandExtract implements Command {
                     try (Output out = createOutput(outFile, formatter)) {
                         File inFile = new File(in);
                         extract(inFile, out);
-                    } catch (IOException ex) {
-                        throw new UncheckedIOException(ex);
                     }
                 }
             }
@@ -168,7 +160,7 @@ public class CommandExtract implements Command {
             try {
                 extract(inFile, out);
             } catch (IOException ex) {
-                throw new RuntimeException(ex);
+                throw new UncheckedIOException(ex);
             }
         }
 
@@ -184,7 +176,7 @@ public class CommandExtract implements Command {
      */
     Output createOutput(Path outFile, CdxRecordFormatter formatter) throws IOException {
         if (Files.exists(outFile)) {
-            throw new UncheckedIOException(new IOException(outFile + " already exists"));
+            throw new IOException(outFile + " already exists");
         }
 
         Writer out = new FileWriter(outFile.toFile());
