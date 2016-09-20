@@ -9,6 +9,10 @@ Command line utility for working with CDX files
 * Extract CDX files in different formats from ARC/WARC files.
 * Reformat CDX file into another CDX format.
 
+## Prerequisites
+
+cdx-cli requires Java 8.
+
 ##Usage:
 
 The utility is in its early stages and there is no distribution yet.
