@@ -57,7 +57,7 @@ public class SortingOutput implements Output {
     @Override
     public void write(CdxRecord record) {
         try {
-            queue.put(formatter.format(record, true));
+            queue.put(formatter.format(record));
         } catch (Exception ex) {
             try {
                 close();

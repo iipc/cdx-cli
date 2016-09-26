@@ -202,7 +202,7 @@ public class CommandReformat implements Command {
         CdxRecordFormatter formatter = new CdxRecordFormatter(format);
 
         for (CdxRecord cdxLine : result) {
-            formatter.format(out, cdxLine, true);
+            formatter.format(out, cdxLine);
             out.append('\n');
         }
 

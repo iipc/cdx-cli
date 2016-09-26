@@ -39,7 +39,7 @@ public class SerialOutput implements Output {
     @Override
     public synchronized void write(CdxRecord record) {
         try {
-            formatter.format(writer, record, true);
+            formatter.format(writer, record);
             writer.append('\n');
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
