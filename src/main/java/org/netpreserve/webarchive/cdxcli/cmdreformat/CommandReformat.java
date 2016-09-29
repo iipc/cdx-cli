@@ -33,7 +33,7 @@ import org.netpreserve.commons.cdx.CdxFormat;
 import org.netpreserve.commons.cdx.CdxRecord;
 import org.netpreserve.commons.cdx.CdxSource;
 import org.netpreserve.commons.cdx.cdxrecord.CdxjLineFormat;
-import org.netpreserve.commons.cdx.SearchKey;
+import org.netpreserve.commons.cdx.SearchKeyTemplate;
 import org.netpreserve.commons.cdx.SearchResult;
 import org.netpreserve.commons.cdx.cdxsource.BlockCdxSource;
 import org.netpreserve.commons.cdx.cdxsource.CdxFileDescriptor;
@@ -197,7 +197,7 @@ public class CommandReformat implements Command {
      * @throws IOException is thrown if the underlying IO classes could not read or write
      */
     void reformat(CdxSource src, Writer out) throws IOException {
-        SearchResult result = src.search(new SearchKey(), null, false);
+        SearchResult result = src.search(new SearchKeyTemplate(), null, false);
 
         CdxRecordFormatter formatter = new CdxRecordFormatter(format);
 
